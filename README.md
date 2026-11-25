@@ -27,5 +27,3 @@
 <p align="center">
   <img src="assets/stack.svg" width="100%" alt="Tech stack: Python, Java, C, C++, SQL, Dart; pandas, scikit-learn, XGBoost; Node.js, Express, GraphQL, gRPC, Kafka; PostgreSQL, MySQL, MongoDB, Firebase; Flutter, Angular, Django, Symfony, .NET; Git, Robot Framework.">
 </p>
-
-<p align="center"><sub>Cards drawn by <a href="scripts/build_cards.py">scripts/build_cards.py</a> · more on <a href="https://salahghezaiel.me">salahghezaiel.me</a></sub></p>
