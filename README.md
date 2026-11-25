@@ -3,13 +3,15 @@
 </p>
 
 <p align="center">
-  <a href="https://salahghezaiel.me"><img src="assets/btn-portfolio.svg" height="44" alt="Portfolio"></a>&nbsp;
-  <a href="https://www.linkedin.com/in/salahghezaiel"><img src="assets/btn-linkedin.svg" height="44" alt="LinkedIn"></a>&nbsp;
-  <a href="mailto:salaheddine.ghezaiel@polytechnicien.tn"><img src="assets/btn-email.svg" height="44" alt="Email"></a>&nbsp;
-  <a href="https://salahghezaiel.me/resume-en.pdf"><img src="assets/btn-resume.svg" height="44" alt="Resume (PDF)"></a>
+  <a href="https://salahghezaiel.me"><img src="assets/btn-portfolio.svg" height="50" alt="Portfolio"></a>&nbsp;
+  <a href="https://www.linkedin.com/in/salahghezaiel"><img src="assets/btn-linkedin.svg" height="50" alt="LinkedIn"></a>&nbsp;
+  <a href="mailto:salaheddine.ghezaiel@polytechnicien.tn"><img src="assets/btn-email.svg" height="50" alt="Email"></a>&nbsp;
+  <a href="https://salahghezaiel.me/resume-en.pdf"><img src="assets/btn-resume.svg" height="50" alt="Resume (PDF)"></a>
 </p>
 
 <br>
+
+<p align="center"><img src="assets/header-work.svg" width="100%" alt="Featured work"></p>
 
 <p align="center">
   <a href="https://github.com/SalahEddineGhezaiel/Fashion-Recommendation-System"><img src="assets/project-fashion.svg" width="49%" alt="Fashion Recommendation System: hybrid recommender on the H&M dataset, served by a Flask API."></a>

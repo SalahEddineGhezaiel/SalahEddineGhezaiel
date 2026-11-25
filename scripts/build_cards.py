@@ -3,8 +3,9 @@
 Run from the repo root:  python scripts/build_cards.py
 Needs: pip install fonttools brotli
 
-Fonts are subset to the characters each card uses and embedded as base64,
-so the cards render the same everywhere GitHub shows them.
+Style: chunky cartoon cards. Navy dotted ground, saturated colour blocks, ink outlines
+and hard offset shadows. Fonts (Baloo 2, JetBrains Mono) are subset to the characters
+each card uses and embedded, so the cards look the same everywhere.
 """
 import base64
 import io
@@ -19,22 +20,19 @@ ROOT = Path(__file__).resolve().parent.parent
 FONTS = ROOT / "scripts" / "fonts"
 OUT = ROOT / "assets"
 
-# Palette: the portfolio's dark theme (salahghezaiel.me)
-BG, SURFACE, LINE = "#262624", "#30302e", "#3e3e3a"
-TEXT, MUTED, CLAY = "#f5f4ee", "#b7b5a9", "#d97757"
-TINTS = {  # chip colour: (fill, text)
-    "clay": ("#4a3129", "#f0a589"),
-    "sage": ("#2f3d2e", "#a9cf9f"),
-    "blue": ("#2c3646", "#a9c1e8"),
-    "amber": ("#433a28", "#e3c27f"),
-    "plum": ("#3b2f40", "#cfb0dc"),
+NAVY, PANEL, INK = "#1b1e30", "#252a42", "#0b0d17"
+CREAM, MUTED = "#f8f2e4", "#aab0cf"
+COLORS = {
+    "blue": "#2f5fb4", "green": "#2e7d50", "orange": "#cc6a2c",
+    "purple": "#6a49ad", "red": "#b53a55", "teal": "#1f7778",
 }
+SHADOW = 6  # hard offset shadow, px
 
-FACES = {  # family name in the SVG -> (file, weight)
-    "Serif500": ("source-serif-4-latin.woff2", 500),
-    "Serif600": ("source-serif-4-latin.woff2", 600),
-    "Sans400": ("source-sans-3-latin.woff2", 400),
-    "Sans600": ("source-sans-3-latin.woff2", 600),
+FACES = {  # family name used in the SVG -> (file, weight)
+    "Display800": ("baloo-2-latin.woff2", 800),
+    "Display700": ("baloo-2-latin.woff2", 700),
+    "Display500": ("baloo-2-latin.woff2", 500),
+    "Mono": ("jetbrains-mono-latin.woff2", 500),
 }
 _fonts = {}
 
@@ -42,8 +40,7 @@ _fonts = {}
 def font(face):
     if face not in _fonts:
         file, weight = FACES[face]
-        f = TTFont(FONTS / file)
-        _fonts[face] = instancer.instantiateVariableFont(f, {"wght": weight})
+        _fonts[face] = instancer.instantiateVariableFont(TTFont(FONTS / file), {"wght": weight})
     return _fonts[face]
 
 
@@ -66,7 +63,7 @@ def wrap(text, face, size, max_w):
 
 
 class Card:
-    """Collects SVG elements and the text used per font face (for subsetting)."""
+    """Collects SVG elements plus the text used per font face (for subsetting)."""
 
     def __init__(self, w, h, title):
         self.w, self.h, self.title, self.parts, self.used = w, h, title, [], {}
@@ -74,49 +71,48 @@ class Card:
     def add(self, s):
         self.parts.append(s)
 
-    def text(self, x, y, s, face, size, fill=TEXT, anchor="start", extra=""):
+    def text(self, x, y, s, face, size, fill=CREAM, anchor="start", extra=""):
         self.used[face] = self.used.get(face, "") + s
         self.add(f'<text x="{x:.1f}" y="{y:.1f}" font-family="{face}" font-size="{size}" '
                  f'fill="{fill}" text-anchor="{anchor}" {extra}>{escape(s)}</text>')
         return width(s, face, size)
 
-    def chip(self, x, y, label, tint, size=15, h=30, pad=13):
-        fill, fg = TINTS[tint]
-        w = width(label, "Sans600", size) + 2 * pad
-        self.add(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h}" rx="9" fill="{fill}"/>')
-        self.text(x + pad, y + h / 2 + size * 0.35, label, "Sans600", size, fg)
-        return w
+    def block(self, x, y, w, h, fill, r=20, shadow=SHADOW, border=2.5, dots=False):
+        """Rounded block with an ink outline and a hard offset shadow."""
+        self.add(f'<rect x="{x + shadow}" y="{y + shadow}" width="{w}" height="{h}" rx="{r}" fill="{INK}"/>')
+        self.add(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" fill="{fill}" '
+                 f'stroke="{INK}" stroke-width="{border}"/>')
+        if dots:
+            self.add(f'<rect x="{x + 2}" y="{y + 2}" width="{w - 4}" height="{h - 4}" rx="{r - 2}" fill="url(#dots)"/>')
 
-    def frame(self, dots=True):
-        self.add(f'<rect x="0.5" y="0.5" width="{self.w - 1}" height="{self.h - 1}" rx="22" '
-                 f'fill="{BG}" stroke="{LINE}"/>')
-        if dots:  # quiet dot grid, the card's only texture
-            self.add(f'<rect x="1" y="1" width="{self.w - 2}" height="{self.h - 2}" rx="21" fill="url(#dots)"/>')
+    def chip(self, x, y, label, color, size=16, h=34, pad=14, face="Display700", fg=CREAM, shadow=3):
+        w = width(label, face, size) + 2 * pad
+        self.block(x, y, w, h, color, r=10, shadow=shadow, border=2)
+        self.text(x + pad, y + h / 2 + size * 0.36, label, face, size, fg)
+        return w
 
     def svg(self):
         faces = []
         for face, chars in self.used.items():
-            f = font(face)
             buf = io.BytesIO()
+            font(face).save(buf)
+            buf.seek(0)
+            g = TTFont(buf)  # subset a copy so later cards keep every glyph
             opts = subset.Options()
-            opts.flavor, opts.layout_features = "woff2", ["kern", "liga"]
+            opts.layout_features = ["kern", "liga"]
             sub = subset.Subsetter(opts)
             sub.populate(text="".join(sorted(set(chars))))
-            g = TTFont()  # subset a copy so later cards still have every glyph
-            f.save(buf)
-            buf.seek(0)
-            g = TTFont(buf)
             sub.subset(g)
-            out = io.BytesIO()
             g.flavor = "woff2"
+            out = io.BytesIO()
             g.save(out)
             data = base64.b64encode(out.getvalue()).decode()
             faces.append(f'@font-face{{font-family:{face};src:url(data:font/woff2;base64,{data}) format("woff2")}}')
         return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.w}" height="{self.h}" '
                 f'viewBox="0 0 {self.w} {self.h}" role="img" aria-label="{escape(self.title)}">'
                 f'<title>{escape(self.title)}</title><defs><style>{"".join(faces)}</style>'
-                f'<pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">'
-                f'<circle cx="2" cy="2" r="1.1" fill="#ffffff" fill-opacity="0.05"/></pattern></defs>'
+                '<pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">'
+                '<circle cx="2" cy="2" r="1.3" fill="#ffffff" fill-opacity="0.07"/></pattern></defs>'
                 + "".join(self.parts) + "</svg>")
 
 
@@ -128,53 +124,48 @@ def save(name, card):
 
 # ---------------------------------------------------------------- hero
 def hero():
-    c = Card(840, 300, "Hi, I'm Salah. Data Science and AI engineering student at the Polytechnic "
-                       "School of Sousse, Tunisia. Machine learning, data engineering, backend and "
-                       "APIs, Flutter apps. Open to a PFE (final-year) internship.")
-    c.frame()
-    # monogram tile, slightly tilted, with a soft offset shadow
-    c.add('<g transform="rotate(-4 98 104)">'
-          '<rect x="52" y="64" width="92" height="92" rx="20" fill="#000" fill-opacity="0.35" transform="translate(5 7)"/>'
-          f'<rect x="52" y="64" width="92" height="92" rx="20" fill="{CLAY}"/>'
-          '</g>')
-    c.text(98, 130, "S", "Serif600", 64, BG, "middle", 'transform="rotate(-4 98 104)"')
-    x = 180
-    w = c.text(x, 122, "Hi, I'm ", "Serif500", 60)
-    c.text(x + w, 122, "Salah", "Serif500", 60, CLAY)
-    c.text(x, 160, "Data Science & AI engineering student at the Polytechnic School", "Sans400", 19, MUTED)
-    c.text(x, 185, "of Sousse, Tunisia. I build ML pipelines, data warehouses and apps.", "Sans400", 19, MUTED)
+    W, H = 840, 330
+    c = Card(W, H, "Hi, I'm Salah. Data Science and AI engineering student in Sousse, Tunisia, "
+                   "building ML pipelines, data warehouses and the apps around them. Machine "
+                   "learning, data engineering, backend and APIs, Flutter apps. Open to a PFE "
+                   "(final-year) internship.")
+    c.block(0, 0, W - SHADOW, H - SHADOW, NAVY, r=26, dots=True)
+    # monogram: cream tile with an orange offset block behind it
+    c.add('<g transform="rotate(-5 100 112)">')
+    c.add(f'<rect x="58" y="72" width="96" height="96" rx="22" fill="{COLORS["orange"]}" '
+          f'stroke="{INK}" stroke-width="3" transform="translate(9 9)"/>')
+    c.add(f'<rect x="58" y="72" width="96" height="96" rx="22" fill="{CREAM}" stroke="{INK}" stroke-width="4"/>')
+    c.text(106, 145, "S", "Display800", 78, INK, "middle")
+    c.add("</g>")
+    # greeting, with the name on a red block
+    x, y = 190, 128
+    w = c.text(x, y, "Hi, I'm", "Display800", 66)
+    nx = x + w + 14
+    nw = width("Salah", "Display800", 66) + 28
+    c.block(nx, y - 62, nw, 80, COLORS["red"], r=16, shadow=5, border=3)
+    c.text(nx + 14, y, "Salah", "Display800", 66)
+    c.text(x, y + 44, "Data Science & AI engineering student in Sousse, Tunisia,", "Display500", 21, CREAM)
+    c.text(x, y + 70, "building ML pipelines, data warehouses and the apps around them.", "Display500", 21, CREAM)
     cx = x
-    for label, tint in [("Machine learning", "clay"), ("Data engineering", "sage"),
-                        ("Backend & APIs", "blue"), ("Flutter apps", "amber")]:
-        cx += c.chip(cx, 208, label, tint) + 10
+    for label, col in [("Machine learning", "blue"), ("Data engineering", "orange"),
+                       ("Backend & APIs", "purple"), ("Flutter apps", "green")]:
+        cx += c.chip(cx, y + 94, label, COLORS[col]) + 12
+    assert cx <= W - 30, "hero chips overflow"
     # status line
-    c.add('<circle cx="187" cy="268" r="5" fill="#8cbf7c"/>'
-          '<circle cx="187" cy="268" r="9" fill="#8cbf7c" fill-opacity="0.2"/>')
-    c.text(203, 274, "Open to a PFE (final-year) internship", "Sans600", 16, TEXT)
+    c.add(f'<circle cx="{x + 8}" cy="{y + 166}" r="6" fill="#5fd38a" stroke="{INK}" stroke-width="2"/>')
+    c.text(x + 24, y + 171, "open to a PFE (final-year) internship", "Mono", 15, MUTED)
     # tilted sticker, top right
     label = "salahghezaiel.me"
-    sw = width(label, "Sans600", 17) + 32
-    sx = 840 - 40 - sw
-    c.add(f'<g transform="rotate(5 {sx + sw / 2} 54)">'
-          f'<rect x="{sx}" y="34" width="{sw}" height="40" rx="10" fill="#000" fill-opacity="0.35" transform="translate(4 5)"/>'
-          f'<rect x="{sx}" y="34" width="{sw}" height="40" rx="10" fill="{CLAY}"/>')
-    c.text(sx + sw / 2, 60, label, "Sans600", 17, BG, "middle")
+    sw = width(label, "Display800", 20) + 34
+    sx = W - SHADOW - 36 - sw
+    c.add(f'<g transform="rotate(6 {sx + sw / 2} 52)">')
+    c.block(sx, 30, sw, 44, COLORS["orange"], r=12, shadow=5, border=3)
+    c.text(sx + sw / 2, 60, label, "Display800", 20, INK, "middle")
     c.add("</g>")
     return c
 
 
 # ---------------------------------------------------------------- link buttons
-def button(label, tint, icon):
-    fill, fg = TINTS[tint]
-    w = int(width(label, "Sans600", 17) + 66)
-    c = Card(w, 48, label)
-    c.add(f'<rect x="0.5" y="0.5" width="{w - 1}" height="47" rx="13" fill="{fill}" stroke="{fg}" stroke-opacity="0.25"/>')
-    c.add(f'<g transform="translate(18 14)" fill="none" stroke="{fg}" stroke-width="1.8" '
-          f'stroke-linecap="round" stroke-linejoin="round">{icon}</g>')
-    c.text(46, 30, label, "Sans600", 17, fg)
-    return c
-
-
 ICONS = {
     "globe": '<circle cx="10" cy="10" r="9"/><path d="M1 10h18M10 1c3 3 3 15 0 18M10 1c-3 3-3 15 0 18"/>',
     "in": '<rect x="1" y="1" width="18" height="18" rx="4"/><path d="M6 8.5v6M6 5.5v.2M10 14.5v-6M10 11c0-2 4-3 4 0v3.5"/>',
@@ -183,83 +174,120 @@ ICONS = {
 }
 
 
-# ---------------------------------------------------------------- project cards
-def project(kicker, tint, title, desc, stack):
-    c = Card(410, 262, f"{title}: {desc} Stack: {', '.join(stack)}.")
-    c.frame()
-    c.chip(26, 24, kicker, tint, size=13, h=26, pad=10)
-    c.add(f'<path d="M372 30l10-10M374 20h8v8" fill="none" stroke="{MUTED}" stroke-width="2" '
-          'stroke-linecap="round" stroke-linejoin="round"/>')
-    y = 86
-    for line in wrap(title, "Serif600", 25, 358):
-        c.text(26, y, line, "Serif600", 25)
-        y += 31
-    y += 2
-    for line in wrap(desc, "Sans400", 15.5, 358):
-        c.text(26, y, line, "Sans400", 15.5, MUTED)
+def button(label, color, icon):
+    w = int(width(label, "Display700", 19) + 72)
+    c = Card(w + 5, 56, label)
+    c.block(0, 0, w, 50, COLORS[color], r=14, shadow=5, border=2.5)
+    c.add(f'<g transform="translate(19 15)" fill="none" stroke="{CREAM}" stroke-width="2.2" '
+          f'stroke-linecap="round" stroke-linejoin="round">{icon}</g>')
+    c.text(50, 32, label, "Display700", 19)
+    return c
+
+
+# ---------------------------------------------------------------- section header
+def header(title, note):
+    W, H = 840, 76
+    c = Card(W, H, title)
+    c.block(0, 0, W - SHADOW, H - SHADOW, NAVY, r=20, dots=True)
+    c.text(30, 47, title, "Display800", 32)
+    c.text(W - SHADOW - 30, 44, note, "Mono", 14, MUTED, "end")
+    return c
+
+
+# ---------------------------------------------------------------- project tiles
+PROJECT_ICONS = {  # 28x28, drawn in cream strokes
+    "spark": '<path d="M14 2c1 6 4 9 12 12-8 3-11 6-12 12-1-6-4-9-12-12 8-3 11-6 12-12z"/>',
+    "db": '<ellipse cx="14" cy="6" rx="11" ry="4"/><path d="M3 6v16c0 2.2 4.9 4 11 4s11-1.8 11-4V6M3 14c0 2.2 4.9 4 11 4s11-1.8 11-4"/>',
+    "nodes": '<circle cx="6" cy="6" r="4"/><circle cx="22" cy="6" r="4"/><circle cx="14" cy="22" r="4"/><path d="M10 6h8M8 9.5l4 9M20 9.5l-4 9"/>',
+    "ball": '<circle cx="14" cy="14" r="12"/><path d="M14 8l5 3.6-2 6H11l-2-6z"/><path d="M14 2v6M24.5 9.5l-5.5 2M21 23l-4-5M7 23l4-5M3.5 9.5l5.5 2"/>',
+}
+
+
+def project(kicker, color, icon, title, desc, stack):
+    W, H = 410, 286
+    c = Card(W, H, f"{title}: {desc} Stack: {', '.join(stack)}.")
+    c.block(0, 0, W - SHADOW, H - SHADOW, COLORS[color], r=22, dots=True)
+    # icon badge, top right
+    c.block(W - SHADOW - 64, 20, 46, 46, CREAM, r=12, shadow=3, border=2.5)
+    c.add(f'<g transform="translate({W - SHADOW - 64 + 9} 29)" fill="none" stroke="{INK}" stroke-width="2.2" '
+          f'stroke-linecap="round" stroke-linejoin="round">{PROJECT_ICONS[icon]}</g>')
+    c.text(26, 44, kicker.upper(), "Mono", 13, CREAM, extra='fill-opacity="0.8" letter-spacing="1"')
+    y = 92
+    for line in wrap(title, "Display800", 29, 352):
+        c.text(26, y, line, "Display800", 29)
+        y += 32
+    y += 4
+    for line in wrap(desc, "Display500", 16, 352):
+        c.text(26, y, line, "Display500", 16, CREAM, extra='fill-opacity="0.92"')
         y += 21
-    x, cy = 26, 262 - 26 - 26
+    cy = H - SHADOW - 24 - 30
+    assert (y - 21) + 6 <= cy - 8, f"text overflows on {title}"
+    x = 26
     for s in stack:
-        x += c.chip(x, cy, s, tint, size=13, h=26, pad=9) + 7
-    assert x <= 410 - 20, f"stack chips overflow on {title}"
-    last_baseline = y - 21  # y already points at the next line
-    assert last_baseline + 5 <= cy - 10, f"text overflows on {title}"
+        w = width(s, "Mono", 13) + 20
+        c.add(f'<rect x="{x}" y="{cy}" width="{w:.1f}" height="30" rx="8" fill="{INK}" fill-opacity="0.35"/>')
+        c.text(x + 10, cy + 20, s, "Mono", 13)
+        x += w + 8
+    assert x <= W - SHADOW - 16, f"stack chips overflow on {title}"
     return c
 
 
 # ---------------------------------------------------------------- tech stack
 STACK = [
-    ("Languages", "clay", ["Python", "Java", "C", "C++", "SQL", "Dart"]),
-    ("ML & data", "sage", ["pandas", "scikit-learn", "XGBoost", "Matplotlib", "Seaborn"]),
-    ("Backend", "blue", ["Node.js", "Express", "REST", "GraphQL", "gRPC", "Kafka", "Microservices"]),
-    ("Databases", "amber", ["PostgreSQL", "MySQL", "MongoDB", "Firebase"]),
-    ("Apps & web", "plum", ["Flutter", "Angular", "Django", "Symfony", ".NET"]),
-    ("Tools", "clay", ["Git", "GitHub", "Robot Framework"]),
+    ("languages", "blue", ["Python", "Java", "C", "C++", "SQL", "Dart"]),
+    ("ml & data", "green", ["pandas", "scikit-learn", "XGBoost", "Matplotlib", "Seaborn"]),
+    ("backend", "purple", ["Node.js", "Express", "REST", "GraphQL", "gRPC", "Kafka"]),
+    ("databases", "orange", ["PostgreSQL", "MySQL", "MongoDB", "Firebase"]),
+    ("apps & web", "red", ["Flutter", "Angular", "Django", "Symfony", ".NET"]),
+    ("tools", "teal", ["Git", "GitHub", "Robot Framework"]),
 ]
 
 
 def stack_card():
-    rows = len(STACK)
-    c = Card(840, 96 + rows * 42 + 18, "Tech stack. " + " ".join(
+    W = 840
+    H = 104 + len(STACK) * 50 + 16 + SHADOW
+    c = Card(W, H, "Tech stack. " + " ".join(
         f"{label}: {', '.join(items)}." for label, _, items in STACK))
-    c.frame()
-    c.text(34, 58, "Tech stack", "Serif600", 28)
+    c.block(0, 0, W - SHADOW, H - SHADOW, NAVY, r=26, dots=True)
+    c.text(32, 62, "Tech stack", "Display800", 34)
+    c.text(W - SHADOW - 32, 58, "what I build with", "Mono", 14, MUTED, "end")
     y = 92
-    for label, tint, items in STACK:
-        c.text(34, y + 20, label, "Sans600", 15, MUTED)
-        x = 160
+    for label, col, items in STACK:
+        c.text(32, y + 23, label, "Mono", 14, MUTED)
+        x = 172
         for it in items:
-            x += c.chip(x, y, it, tint) + 8
-        assert x <= 840 - 24, f"stack row overflows: {label}"
-        y += 42
+            x += c.chip(x, y, it, COLORS[col], size=16, h=34, pad=13) + 11
+        assert x <= W - SHADOW - 20, f"stack row overflows: {label}"
+        y += 50
     return c
 
 
 if __name__ == "__main__":
     save("hero.svg", hero())
-    for name, label, tint, icon in [("btn-portfolio.svg", "Portfolio", "clay", "globe"),
-                                    ("btn-linkedin.svg", "LinkedIn", "blue", "in"),
-                                    ("btn-email.svg", "Email", "sage", "mail"),
-                                    ("btn-resume.svg", "Resume", "amber", "doc")]:
-        save(name, button(label, tint, ICONS[icon]))
+    for name, label, col, icon in [("btn-portfolio.svg", "Portfolio", "orange", "globe"),
+                                   ("btn-linkedin.svg", "LinkedIn", "blue", "in"),
+                                   ("btn-email.svg", "Email", "green", "mail"),
+                                   ("btn-resume.svg", "Resume", "purple", "doc")]:
+        save(name, button(label, col, ICONS[icon]))
+    save("header-work.svg", header("Featured work", "click a card to open the repo"))
     save("project-fashion.svg", project(
-        "Machine learning", "clay", "Fashion Recommendation System",
-        "Hybrid recommender on the H&M dataset: collaborative filtering (TruncatedSVD) "
-        "blended with content-based similarity, served by a Flask API.",
+        "Machine learning", "blue", "spark", "Fashion Recommendation System",
+        "Hybrid recommender on the H&M dataset: SVD collaborative filtering blended with "
+        "content similarity, served by a Flask API.",
         ["Python", "scikit-learn", "Flask"]))
     save("project-warehouse.svg", project(
-        "Data engineering", "sage", "E-Commerce Data Warehouse",
+        "Data engineering", "orange", "db", "E-Commerce Data Warehouse",
         "PostgreSQL star schema (a sales fact table and five dimensions) on the Olist "
         "dataset, loaded by a Python ETL pipeline.",
         ["PostgreSQL", "Python", "pygrametl"]))
     save("project-stadium.svg", project(
-        "Backend", "blue", "Stadium Reservation Microservices",
+        "Backend", "purple", "nodes", "Stadium Reservation Microservices",
         "Node.js microservices behind a REST + GraphQL gateway, talking over gRPC and "
-        "publishing reservation events on Kafka.",
-        ["Node.js", "gRPC", "Kafka", "GraphQL"]))
+        "publishing events on Kafka.",
+        ["Node.js", "gRPC", "Kafka"]))
     save("project-injury.svg", project(
-        "ML · sports data", "amber", "Soccer Player Injury Prediction",
-        "Ranks next-season injury risk from earlier-season data, with a split grouped by "
-        "player. ROC-AUC 0.69 vs 0.50 for chance.",
+        "ML · sports data", "green", "ball", "Soccer Player Injury Prediction",
+        "Ranks next-season injury risk from earlier-season data, split by player. "
+        "ROC-AUC 0.69 vs 0.50 for chance.",
         ["Python", "XGBoost", "pandas"]))
     save("stack.svg", stack_card())
