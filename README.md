@@ -11,7 +11,7 @@
 
 <br>
 
-<p align="center"><a href="https://salahghezaiel.me/#work"><img src="assets/header-work.svg" width="100%" alt="Featured work"></a></p>
+<p align="center"><img src="assets/header-work.svg" width="100%" alt="Featured work"></p>
 
 <p align="center">
   <a href="https://github.com/SalahEddineGhezaiel/Fashion-Recommendation-System"><img src="assets/project-fashion.svg" width="49%" alt="Fashion Recommendation System: hybrid recommender on the H&M dataset, served by a Flask API."></a>
@@ -25,5 +25,5 @@
 <br>
 
 <p align="center">
-  <a href="https://salahghezaiel.me/#skills"><img src="assets/stack.svg" width="100%" alt="Tech stack: Python, Java, C, C++, SQL, Dart; pandas, scikit-learn, XGBoost; Node.js, Express, GraphQL, gRPC, Kafka; PostgreSQL, MySQL, MongoDB, Firebase; Flutter, Angular, Django, Symfony, .NET; Git, Robot Framework."></a>
+  <img src="assets/stack.svg" width="100%" alt="Tech stack: Python, Java, C, C++, SQL, Dart; pandas, scikit-learn, XGBoost; Node.js, Express, GraphQL, gRPC, Kafka; PostgreSQL, MySQL, MongoDB, Firebase; Flutter, Angular, Django, Symfony, .NET; Git, Robot Framework.">
 </p>
